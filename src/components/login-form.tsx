@@ -18,15 +18,16 @@ export function LoginForm() {
     setLoading(true);
     setMessage(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: true },
+    const res = await fetch("/api/auth/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     });
+    const data = (await res.json()) as { error?: string };
 
     setLoading(false);
-    if (error) {
-      setMessage(error.message);
+    if (!res.ok) {
+      setMessage(data.error ?? "Could not send a code.");
       return;
     }
 
