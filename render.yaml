@@ -1,0 +1,44 @@
+services:
+  reel-stash:
+    type: web
+    name: reel-stash
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: NVIDIA_MODEL
+        value: nvidia/llama-3.1-nemotron-70b-instruct
+      - key: CRON_SECRET
+        generateValue: true
+      - key: GITHUB_TOKEN
+        sync: false
+
+  reel-stash-cron:
+    type: cron
+    name: reel-stash-cron
+    schedule: "0 3 * * *"
+    runtime: node
+    plan: free
+    buildCommand: echo "cron"
+    startCommand: curl -s -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron"
+    envVars:
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false

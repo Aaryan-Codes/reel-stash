@@ -1,0 +1,16 @@
+{
+  "name": "Reel Stash",
+  "short_name": "Reel Stash",
+  "description": "Personal inbox for reels and links",
+  "start_url": "/inbox",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
