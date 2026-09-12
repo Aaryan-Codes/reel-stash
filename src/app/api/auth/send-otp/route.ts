@@ -31,8 +31,16 @@ async function sendCodeViaZoho(email: string) {
   });
 
   if (generated.error) {
+    const created = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      password: `${crypto.randomUUID()}A1!`,
+    });
+    if (created.error && !/already been registered|already exists/i.test(created.error.message)) {
+      throw new Error(created.error.message);
+    }
     generated = await admin.auth.admin.generateLink({
-      type: "signup",
+      type: "magiclink",
       email,
     });
   }
