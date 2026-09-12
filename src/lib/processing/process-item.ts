@@ -1,17 +1,33 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { deleteTempAudio, persistThumbnail, uploadTempAudio } from "@/lib/storage";
-import {
-  extractInstagramAudio,
-  extractLinksFromCaption,
-  fetchInstagramMetadata,
-} from "@/lib/extractors/instagram";
-import { transcribeAudio } from "@/lib/extractors/groq-transcribe";
-import { fetchGitHubRepo, findGitHubUrl } from "@/lib/extractors/github";
-import { extractStructuredContent } from "@/lib/extractors/nemotron";
+import { persistThumbnail } from "@/lib/storage";
+import { extractLinksFromCaption, fetchInstagramMetadata } from "@/lib/extractors/instagram";
+import { getBestTranscript } from "@/lib/extractors/best-transcript";
+import { fetchGitHubRepo, findGitHubUrl, searchGitHubRepos } from "@/lib/extractors/github";
+import { extractStructuredContent, scoutReel } from "@/lib/extractors/nemotron";
 import { fetchWebpage, findFirstWebUrl } from "@/lib/extractors/webpage";
-import { detectSource, extractUrls, normalizeUrl, sleep } from "@/lib/utils";
+import { PROCESSING_STAGES, type ProcessingStage } from "@/lib/processing/stages";
+import { detectSource, extractUrls, findGitHubRepoInText, normalizeUrl, sleep } from "@/lib/utils";
 
 const MAX_RETRIES = 5;
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+async function setStage(
+  supabase: AdminClient,
+  itemId: string,
+  stage: ProcessingStage,
+  extra: Record<string, unknown> = {},
+) {
+  await supabase
+    .from("items")
+    .update({
+      processing_stage: stage,
+      processing_progress: PROCESSING_STAGES[stage].progress,
+      updated_at: new Date().toISOString(),
+      ...extra,
+    })
+    .eq("id", itemId);
+}
 
 export async function processItem(itemId: string): Promise<void> {
   const supabase = createAdminClient();
@@ -25,7 +41,14 @@ export async function processItem(itemId: string): Promise<void> {
     return;
   }
 
+  const warnings: string[] = [];
+
   try {
+    await setStage(supabase, itemId, "queued", {
+      status: "processing",
+      processing_error: null,
+    });
+
     const url = normalizeUrl(item.url);
     const source = detectSource(url);
 
@@ -34,6 +57,7 @@ export async function processItem(itemId: string): Promise<void> {
     let transcript: string | null = item.transcript;
 
     if (source === "instagram") {
+      await setStage(supabase, itemId, "fetching_metadata");
       const meta = await fetchInstagramMetadata(url);
       caption = meta.caption ?? caption;
       thumbnailUrl = meta.thumbnailUrl ?? thumbnailUrl;
@@ -43,35 +67,63 @@ export async function processItem(itemId: string): Promise<void> {
       }
     }
 
-    if (!transcript && source === "instagram" && process.env.GROQ_API_KEY) {
-      const audio = await extractInstagramAudio(url);
-      if (audio) {
-        const tempPath = await uploadTempAudio(item.user_id, itemId, audio);
-        try {
-          transcript = await transcribeAudio(audio);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "Transcription failed";
-          if (message.includes("429") || message.toLowerCase().includes("rate")) {
-            await scheduleRetry(supabase, itemId, item.retry_count ?? 0, message);
-            return;
-          }
-        } finally {
-          if (tempPath) await deleteTempAudio(tempPath);
-        }
+    if (source === "instagram") {
+      await setStage(supabase, itemId, "transcribing");
+      const result = await getBestTranscript(url);
+      if (result.transcript) {
+        transcript = result.transcript;
+      } else if (result.error?.includes("429")) {
+        await scheduleRetry(supabase, itemId, item.retry_count ?? 0, result.error);
+        return;
+      } else {
+        warnings.push(result.error ?? "Could not transcribe this reel.");
       }
     }
+
+    await setStage(supabase, itemId, "fetching_links");
 
     const linkedUrls = [
       ...extractLinksFromCaption(caption),
       ...extractUrls(transcript ?? ""),
     ];
-    const githubUrl = findGitHubUrl(linkedUrls) ?? (source === "github" ? url : null);
+    const githubUrl =
+      findGitHubUrl(linkedUrls) ??
+      findGitHubRepoInText(`${caption ?? ""}\n${transcript ?? ""}`) ??
+      (source === "github" ? url : null);
     const webUrl = findFirstWebUrl(linkedUrls, githubUrl ? [githubUrl] : []);
 
-    let githubInfo: string | null = null;
-    if (githubUrl) {
+    const scout = await scoutReel({ caption, transcript });
+    let relatedRepos =
+      scout.category === "recipe"
+        ? []
+        : await searchGitHubRepos({
+            productName: scout.name,
+            queries: scout.githubQueries,
+            context: `${caption ?? ""}\n${transcript ?? ""}`,
+          });
+
+    if (githubUrl && !relatedRepos.some((repo) => repo.url === githubUrl)) {
       const repo = await fetchGitHubRepo(githubUrl);
       if (repo) {
+        relatedRepos = [
+          {
+            fullName: repo.fullName,
+            url: repo.url,
+            description: repo.description,
+            stars: repo.stars,
+          },
+          ...relatedRepos,
+        ].slice(0, 5);
+      }
+    }
+
+    const primaryGithub = githubUrl ?? relatedRepos[0]?.url ?? null;
+    let githubInfo: string | null = null;
+    let githubName: string | null = scout.category === "github_repo" ? scout.name : null;
+    if (primaryGithub) {
+      const repo = await fetchGitHubRepo(primaryGithub);
+      if (repo) {
+        githubName = repo.name;
         githubInfo = [
           `Repo: ${repo.name}`,
           repo.description ? `Description: ${repo.description}` : "",
@@ -90,13 +142,18 @@ export async function processItem(itemId: string): Promise<void> {
       webpageInfo = [page.title, page.description, page.excerpt].filter(Boolean).join("\n");
     }
 
+    await setStage(supabase, itemId, "summarizing");
+
     const extraction = await extractStructuredContent({
       url,
       source,
       caption,
       transcript,
       githubInfo,
+      githubUrl: primaryGithub,
+      githubName: githubName ?? scout.name,
       webpageInfo,
+      relatedRepos,
     });
 
     const { error: updateError } = await supabase
@@ -111,9 +168,11 @@ export async function processItem(itemId: string): Promise<void> {
         caption,
         transcript,
         structured_data: extraction.structuredData,
-        confidence: extraction.confidence,
+        confidence: warnings.length ? Math.min(extraction.confidence, 0.45) : extraction.confidence,
         thumbnail_url: thumbnailUrl,
-        processing_error: null,
+        processing_error: warnings.length ? warnings.join(" ") : null,
+        processing_stage: "complete",
+        processing_progress: 100,
         retry_count: 0,
         next_retry_at: null,
         updated_at: new Date().toISOString(),
@@ -133,6 +192,8 @@ export async function processItem(itemId: string): Promise<void> {
       .update({
         status: "inbox",
         processing_error: message,
+        processing_stage: "complete",
+        processing_progress: 100,
         title: item.title ?? "Saved link",
         summary: item.summary ?? "Processing completed with partial data.",
         confidence: 0.2,
@@ -143,7 +204,7 @@ export async function processItem(itemId: string): Promise<void> {
 }
 
 async function scheduleRetry(
-  supabase: ReturnType<typeof createAdminClient>,
+  supabase: AdminClient,
   itemId: string,
   retryCount: number,
   message: string,
@@ -155,6 +216,8 @@ async function scheduleRetry(
       .update({
         status: "inbox",
         processing_error: message,
+        processing_stage: "complete",
+        processing_progress: 100,
         confidence: 0.2,
         updated_at: new Date().toISOString(),
       })
@@ -171,6 +234,8 @@ async function scheduleRetry(
       retry_count: nextRetry,
       next_retry_at: nextRetryAt,
       processing_error: message,
+      processing_stage: "waiting_retry",
+      processing_progress: PROCESSING_STAGES.waiting_retry.progress,
       updated_at: new Date().toISOString(),
     })
     .eq("id", itemId);

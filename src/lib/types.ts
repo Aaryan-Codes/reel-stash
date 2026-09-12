@@ -18,6 +18,8 @@ export interface ItemRow {
   stashed_at: string | null;
   expires_at: string | null;
   processing_error: string | null;
+  processing_stage: string | null;
+  processing_progress: number;
   retry_count: number;
   next_retry_at: string | null;
   created_at: string;

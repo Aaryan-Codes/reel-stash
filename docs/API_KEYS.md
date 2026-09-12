@@ -25,7 +25,21 @@ Docs: https://supabase.com/docs/guides/getting-started
 
 ---
 
-## 2. Groq (Whisper transcription)
+## 2. Captapi (Instagram reel → transcript)
+
+This is the simple path: send the reel URL, get spoken text back. No yt-dlp, no browser cookies.
+
+| | |
+|---|---|
+| **Sign up** | https://captapi.com |
+| **Docs** | https://captapi.com/apis/instagram-transcript |
+| **Copy key to** | `CAPTAPI_API_KEY` |
+
+**Free tier:** 100 credits on signup, no card. Each transcript costs 2 credits (~50 reels). Cached repeats are free for 24 hours.
+
+---
+
+## 3. Groq (optional Whisper fallback)
 
 | | |
 |---|---|
@@ -44,7 +58,7 @@ Docs: https://console.groq.com/docs/speech-to-text
 
 ---
 
-## 3. NVIDIA NIM / Nemotron (summarization & extraction)
+## 4. NVIDIA NIM / Nemotron (summarization & extraction)
 
 | | |
 |---|---|
@@ -58,7 +72,7 @@ Docs: https://console.groq.com/docs/speech-to-text
 2. **Settings → API Keys → Generate**.
 3. Copy key → `NVIDIA_API_KEY`
 4. Verify your model ID: `GET https://integrate.api.nvidia.com/v1/models` with `Authorization: Bearer YOUR_KEY`.  
-   Default in this app: `nvidia/llama-3.1-nemotron-70b-instruct`
+   Default in this app: `nvidia/nemotron-3-ultra-550b-a55b` (falls back to `nvidia/llama-3.1-nemotron-70b-instruct`). Override with `NVIDIA_MODEL`.
 
 **Free tier:** ~40 requests/minute, ~1,000 inference credits on signup.
 

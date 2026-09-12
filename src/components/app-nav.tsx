@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Archive, Inbox, Settings, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const links = [
-  { href: "/inbox", label: "Inbox" },
-  { href: "/active", label: "Active" },
-  { href: "/archive", label: "Archive" },
-  { href: "/settings", label: "Settings" },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/active", label: "Active", icon: Sparkles },
+  { href: "/archive", label: "Archive", icon: Archive },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function AppNav() {
@@ -22,21 +25,17 @@ export function AppNav() {
   }
 
   return (
-    <header className="sticky top-0 z-20 border-b border-zinc-200/80 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
         <div>
-          <Link href="/inbox" className="text-lg font-semibold tracking-tight text-zinc-900">
+          <Link href="/inbox" className="font-display text-xl font-semibold tracking-tight">
             Reel Stash
           </Link>
-          <p className="text-xs text-zinc-500">Save links. Get structure.</p>
+          <p className="text-xs text-muted-foreground">Save links. Get structure.</p>
         </div>
-        <button
-          type="button"
-          onClick={signOut}
-          className="text-sm text-zinc-500 hover:text-zinc-800"
-        >
+        <Button variant="ghost" size="sm" onClick={signOut}>
           Sign out
-        </button>
+        </Button>
       </div>
       <nav className="mx-auto flex max-w-3xl gap-1 overflow-x-auto px-4 pb-3">
         {links.map((link) => {
@@ -45,12 +44,14 @@ export function AppNav() {
             <Link
               key={link.href}
               href={link.href}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition",
                 active
-                  ? "bg-violet-600 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-              }`}
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
             >
+              <link.icon size={15} strokeWidth={1.75} />
               {link.label}
             </Link>
           );

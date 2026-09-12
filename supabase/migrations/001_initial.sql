@@ -29,6 +29,8 @@ create table if not exists public.items (
   stashed_at timestamptz,
   expires_at timestamptz,
   processing_error text,
+  processing_stage text,
+  processing_progress integer not null default 0,
   retry_count integer not null default 0,
   next_retry_at timestamptz,
   created_at timestamptz not null default now(),

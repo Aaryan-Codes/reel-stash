@@ -19,6 +19,8 @@ export async function transcribeAudio(audio: Buffer, filename = "audio.m4a"): Pr
     file,
     model: "whisper-large-v3-turbo",
     response_format: "text",
+    prompt:
+      "Instagram reel voiceover. Transcribe every spoken word, including recipe ingredients, quantities, and cooking steps. Skip background music lyrics when possible.",
   });
 
   if (typeof response === "string") return response.trim();

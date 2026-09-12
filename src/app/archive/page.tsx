@@ -1,5 +1,6 @@
 import { AppNav } from "@/components/app-nav";
 import { ItemList } from "@/components/item-list";
+import { PageHeader } from "@/components/page-header";
 import { getItemsByStatus } from "@/lib/data/items";
 
 export default async function ArchivePage() {
@@ -8,13 +9,11 @@ export default async function ArchivePage() {
   return (
     <>
       <AppNav />
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-zinc-900">Archive</h1>
-          <p className="mt-1 text-sm text-zinc-600">
-            Stashed items and auto-expired active items live here — still searchable.
-          </p>
-        </div>
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        <PageHeader
+          title="Archive"
+          description="Stashed items and auto-expired active items live here — still searchable."
+        />
         <ItemList
           items={items}
           showCategoryFilters

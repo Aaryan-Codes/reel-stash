@@ -1,28 +1,92 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { ItemRow } from "@/lib/types";
-import { categoryLabel } from "@/lib/utils";
+import { categoryLabel, cn } from "@/lib/utils";
 import { ItemCard } from "@/components/item-card";
+import { Input } from "@/components/ui/input";
 
 const CATEGORIES = ["all", "recipe", "github_repo", "website", "learning", "other"] as const;
+
+type ProgressRow = {
+  id: string;
+  status: string;
+  processing_stage: string | null;
+  processing_progress: number;
+  title: string | null;
+  processing_error: string | null;
+};
 
 export function ItemList({
   items,
   emptyTitle,
   emptyBody,
   showCategoryFilters = false,
+  allowRemove = false,
 }: {
   items: ItemRow[];
   emptyTitle: string;
   emptyBody: string;
   showCategoryFilters?: boolean;
+  allowRemove?: boolean;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("all");
+  const [liveProgress, setLiveProgress] = useState<Record<string, ProgressRow>>({});
+
+  const processingIds = useMemo(
+    () => items.filter((item) => item.status === "processing").map((item) => item.id),
+    [items],
+  );
+
+  useEffect(() => {
+    if (processingIds.length === 0) {
+      setLiveProgress({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function poll() {
+      const res = await fetch("/api/items/progress", { cache: "no-store" });
+      if (!res.ok || cancelled) return;
+      const data = (await res.json()) as { items?: ProgressRow[] };
+      const rows = data.items ?? [];
+      const next: Record<string, ProgressRow> = {};
+      for (const row of rows) next[row.id] = row;
+      if (!cancelled) setLiveProgress(next);
+
+      const stillProcessing = processingIds.some((id) => rows.some((row) => row.id === id));
+      if (!stillProcessing) router.refresh();
+    }
+
+    void poll();
+    const id = window.setInterval(() => void poll(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [processingIds, router]);
+
+  const merged = useMemo(
+    () =>
+      items.map((item) => {
+        const live = liveProgress[item.id];
+        if (!live) return item;
+        return {
+          ...item,
+          processing_stage: live.processing_stage,
+          processing_progress: live.processing_progress,
+          title: live.title ?? item.title,
+        };
+      }),
+    [items, liveProgress],
+  );
 
   const filtered = useMemo(() => {
-    let result = items;
+    let result = merged;
 
     if (category !== "all") {
       result = result.filter((item) => item.category === category);
@@ -36,16 +100,15 @@ export function ItemList({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q)),
     );
-  }, [items, query, category]);
+  }, [merged, query, category]);
 
   return (
     <div className="space-y-4">
-      <input
+      <Input
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search saved items..."
-        className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm outline-none ring-violet-500 focus:ring-2"
       />
 
       {showCategoryFilters ? (
@@ -55,11 +118,12 @@ export function ItemList({
               key={value}
               type="button"
               onClick={() => setCategory(value)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              className={cn(
+                "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition",
                 category === value
-                  ? "bg-violet-600 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-              }`}
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
             >
               {value === "all" ? "All" : categoryLabel(value)}
             </button>
@@ -68,14 +132,14 @@ export function ItemList({
       ) : null}
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center">
-          <h2 className="text-lg font-semibold text-zinc-900">{emptyTitle}</h2>
-          <p className="mt-2 text-sm text-zinc-600">{emptyBody}</p>
+        <div className="paper-card rounded-2xl border-dashed p-8 text-center">
+          <h2 className="font-display text-lg font-semibold">{emptyTitle}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{emptyBody}</p>
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((item) => (
-            <ItemCard key={item.id} item={item} />
+            <ItemCard key={item.id} item={item} allowRemove={allowRemove} />
           ))}
         </div>
       )}

@@ -43,8 +43,12 @@ export async function POST(
       .update({
         status: "processing",
         processing_error: null,
+        processing_stage: "queued",
+        processing_progress: 8,
         retry_count: 0,
         next_retry_at: null,
+        transcript: null,
+        structured_data: null,
         updated_at: now,
       })
       .eq("id", id);

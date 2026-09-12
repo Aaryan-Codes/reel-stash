@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -31,26 +33,21 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-md flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
       <label className="flex flex-col gap-2 text-sm">
-        <span className="font-medium text-zinc-700">Email</span>
-        <input
+        <span className="font-medium text-foreground">Email</span>
+        <Input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="rounded-xl border border-zinc-200 bg-white px-4 py-3 outline-none ring-violet-500 focus:ring-2"
         />
       </label>
-      <button
-        type="submit"
-        disabled={loading}
-        className="rounded-xl bg-violet-600 px-4 py-3 font-medium text-white transition hover:bg-violet-500 disabled:opacity-60"
-      >
+      <Button type="submit" disabled={loading}>
         {loading ? "Sending..." : "Send magic link"}
-      </button>
-      {message ? <p className="text-sm text-zinc-600">{message}</p> : null}
+      </Button>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
     </form>
   );
 }

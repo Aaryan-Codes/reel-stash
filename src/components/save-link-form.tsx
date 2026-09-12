@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function SaveLinkForm() {
   const router = useRouter();
@@ -36,38 +38,31 @@ export function SaveLinkForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm"
-    >
-      <label className="block text-sm font-medium text-zinc-800">Paste a link</label>
-      <p className="mt-1 text-xs text-zinc-500">
+    <form onSubmit={handleSubmit} className="paper-card mb-6 rounded-2xl p-5">
+      <label className="block text-sm font-medium">Paste a link</label>
+      <p className="mt-1 text-xs text-muted-foreground">
         Instagram reel, GitHub repo, or any website — same flow as the iOS Shortcut.
       </p>
-      <input
+      <Input
         type="url"
         required
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         placeholder="https://www.instagram.com/reel/…"
-        className="mt-3 w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm outline-none ring-violet-500 focus:ring-2"
+        className="mt-3"
       />
-      <input
+      <Input
         type="text"
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Optional note"
-        className="mt-2 w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm outline-none ring-violet-500 focus:ring-2"
+        className="mt-2"
       />
-      <div className="mt-3 flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-60"
-        >
+      <div className="mt-4 flex items-center gap-3">
+        <Button type="submit" disabled={loading}>
           {loading ? "Saving…" : "Save to inbox"}
-        </button>
-        {status ? <p className="text-sm text-zinc-600">{status}</p> : null}
+        </Button>
+        {status ? <p className="text-sm text-muted-foreground">{status}</p> : null}
       </div>
     </form>
   );

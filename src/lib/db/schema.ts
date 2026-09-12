@@ -7,6 +7,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { ReelBrief } from "@/lib/extractors/brief";
 
 export const profiles = pgTable("profiles", {
   id: uuid("id").primaryKey(),
@@ -33,6 +34,8 @@ export const items = pgTable("items", {
   stashedAt: timestamp("stashed_at", { withTimezone: true }),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   processingError: text("processing_error"),
+  processingStage: text("processing_stage"),
+  processingProgress: integer("processing_progress").notNull().default(0),
   retryCount: integer("retry_count").notNull().default(0),
   nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -43,42 +46,7 @@ export type Item = typeof items.$inferSelect;
 export type NewItem = typeof items.$inferInsert;
 export type Profile = typeof profiles.$inferSelect;
 
+export type { ItemCategory } from "@/lib/extractors/brief";
 export type ItemStatus = "processing" | "inbox" | "active" | "stashed" | "expired";
-export type ItemCategory = "recipe" | "github_repo" | "website" | "learning" | "other";
 
-export type StructuredData =
-  | RecipeData
-  | GitHubRepoData
-  | WebsiteData
-  | LearningData
-  | Record<string, unknown>;
-
-export interface RecipeData {
-  type: "recipe";
-  ingredients: string[];
-  steps: string[];
-  sourceLinks: string[];
-}
-
-export interface GitHubRepoData {
-  type: "github_repo";
-  repoUrl: string;
-  stars?: number;
-  forks?: number;
-  readmeSummary?: string;
-  whyPopular?: string;
-}
-
-export interface WebsiteData {
-  type: "website";
-  canonicalUrl: string;
-  purpose: string;
-  keyFeatures: string[];
-}
-
-export interface LearningData {
-  type: "learning";
-  topics: string[];
-  takeaways: string[];
-  resources: string[];
-}
+export type StructuredData = ReelBrief | Record<string, unknown>;

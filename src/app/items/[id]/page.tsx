@@ -13,7 +13,7 @@ export default async function ItemPage({ params }: { params: Promise<{ id: strin
   return (
     <>
       <AppNav />
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="mx-auto max-w-3xl px-4 py-8">
         <ItemDetail item={item} />
       </main>
     </>

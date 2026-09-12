@@ -8,7 +8,7 @@ export function InboxRefresh({ enabled }: { enabled: boolean }) {
 
   useEffect(() => {
     if (!enabled) return;
-    const id = window.setInterval(() => router.refresh(), 4000);
+    const id = window.setInterval(() => router.refresh(), 2000);
     return () => window.clearInterval(id);
   }, [enabled, router]);
 

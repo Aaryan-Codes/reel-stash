@@ -1,6 +1,7 @@
 import { AppNav } from "@/components/app-nav";
 import { InboxRefresh } from "@/components/inbox-refresh";
 import { ItemList } from "@/components/item-list";
+import { PageHeader } from "@/components/page-header";
 import { SaveLinkForm } from "@/components/save-link-form";
 import { getItemsByStatus } from "@/lib/data/items";
 
@@ -12,13 +13,11 @@ export default async function InboxPage() {
     <>
       <AppNav />
       <InboxRefresh enabled={processing} />
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-zinc-900">Inbox</h1>
-          <p className="mt-1 text-sm text-zinc-600">
-            New saves land here while Groq transcribes and Nemotron summarizes.
-          </p>
-        </div>
+      <main className="mx-auto max-w-3xl px-4 py-8">
+        <PageHeader
+          title="Inbox"
+          description="New saves land here while we transcribe the reel and turn spoken content into a brief."
+        />
         <SaveLinkForm />
         <ItemList
           items={items}

@@ -2,17 +2,32 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ExternalLink, FolderGit2 } from "lucide-react";
 import type { ItemRow } from "@/lib/types";
-import type { StructuredData } from "@/lib/db/schema";
+import { asBrief, displayBadges } from "@/lib/extractors/brief";
 import { categoryLabel, daysUntil } from "@/lib/utils";
+import { ProcessingBar } from "@/components/processing-bar";
+import { RecipePanel, RelatedRepos, SetupCommands, TakeawayBadges } from "@/components/reel-brief";
+import { ItemGlyph } from "@/components/item-glyph";
+import { iconTone } from "@/lib/item-icon";
+import { Button } from "@/components/ui/button";
 
 export function ItemDetail({ item }: { item: ItemRow }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const actedRef = useRef(false);
-  const structured = item.structured_data as StructuredData | null;
+  const [liveProgress, setLiveProgress] = useState(item.processing_progress ?? 0);
+  const [liveStage, setLiveStage] = useState(item.processing_stage);
+  const brief = asBrief(item.structured_data);
   const daysLeft = daysUntil(item.expires_at);
   const showPrompt = item.status === "inbox";
+  const processing = item.status === "processing";
+  const title = brief?.name || item.title || "Saved link";
+  const summary = brief?.summary || item.summary;
+  const githubUrl = brief?.githubUrl;
+  const badges = brief ? displayBadges(brief) : [];
+  const category = brief?.type || item.category;
+  const tone = iconTone(category);
 
   async function runAction(action: "keep" | "stash" | "reopen" | "retry") {
     actedRef.current = true;
@@ -23,6 +38,37 @@ export function ItemDetail({ item }: { item: ItemRow }) {
   }
 
   useEffect(() => {
+    if (!processing) return;
+    let cancelled = false;
+
+    async function poll() {
+      const res = await fetch("/api/items/progress", { cache: "no-store" });
+      if (!res.ok || cancelled) return;
+      const data = (await res.json()) as {
+        items?: Array<{
+          id: string;
+          processing_stage: string | null;
+          processing_progress: number;
+        }>;
+      };
+      const live = data.items?.find((row) => row.id === item.id);
+      if (!live) {
+        router.refresh();
+        return;
+      }
+      setLiveProgress(live.processing_progress);
+      setLiveStage(live.processing_stage);
+    }
+
+    void poll();
+    const id = window.setInterval(() => void poll(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [processing, item.id, router]);
+
+  useEffect(() => {
     return () => {
       if (showPrompt && item.visited_at && !actedRef.current) {
         void fetch(`/api/items/${item.id}/keep`, { method: "POST" });
@@ -31,178 +77,192 @@ export function ItemDetail({ item }: { item: ItemRow }) {
   }, [item.id, item.visited_at, showPrompt]);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex flex-wrap gap-2">
-          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium">
-            {categoryLabel(item.category)}
-          </span>
-          {item.confidence !== null ? (
-            <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
-              {Math.round(item.confidence * 100)}% confidence
-            </span>
-          ) : null}
-          {daysLeft !== null && item.status === "active" ? (
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-              Auto-archive in {daysLeft} days
-            </span>
+    <div className="space-y-5">
+      <section className="paper-card rounded-2xl">
+        <div className="flex items-start gap-4 p-5 sm:p-6">
+          <ItemGlyph
+            category={category}
+            brief={brief}
+            title={title}
+            summary={summary}
+            size="lg"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-medium ${tone.chip}`}>
+                {categoryLabel(category)}
+              </span>
+              {daysLeft !== null && item.status === "active" ? (
+                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+                  Auto-archive in {daysLeft} days
+                </span>
+              ) : null}
+            </div>
+            <h1 className="font-display mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
+            {summary ? (
+              <p className="mt-3 text-[15px] leading-7 text-muted-foreground">{summary}</p>
+            ) : null}
+          </div>
+        </div>
+
+        {badges.length ? (
+          <div className="border-t border-border px-5 py-4 sm:px-6">
+            <TakeawayBadges badges={badges} />
+          </div>
+        ) : null}
+
+        {processing ? (
+          <div className="border-t border-border px-5 py-4 sm:px-6">
+            <ProcessingBar progress={liveProgress} stage={liveStage} />
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-6">
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ExternalLink size={14} />
+            Open original reel
+          </a>
+          {item.status === "active" ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={!!loading}
+              onClick={async () => {
+                await runAction("stash");
+                router.push("/active");
+              }}
+            >
+              Remove from Active
+            </Button>
           ) : null}
         </div>
-        <h1 className="text-2xl font-semibold text-zinc-900">{item.title ?? "Saved link"}</h1>
-        <p className="mt-3 text-zinc-600">{item.summary}</p>
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex text-sm font-medium text-violet-700 hover:text-violet-600"
-        >
-          Open original link
-        </a>
       </section>
 
+      {githubUrl && !brief?.relatedRepos?.length ? (
+        <a
+          href={githubUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="paper-card flex items-center justify-between gap-4 rounded-2xl px-5 py-4 hover:bg-muted"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <FolderGit2 size={20} />
+            <span className="min-w-0">
+              <span className="block text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                Repository
+              </span>
+              <span className="block truncate font-medium">
+                {githubUrl.replace(/^https:\/\/github\.com\//, "")}
+              </span>
+            </span>
+          </span>
+          <span className="shrink-0 text-sm text-muted-foreground">Open on GitHub</span>
+        </a>
+      ) : null}
+
       {showPrompt ? (
-        <section className="rounded-2xl border border-violet-200 bg-violet-50 p-5">
-          <h2 className="font-semibold text-violet-900">Keep or stash?</h2>
-          <p className="mt-1 text-sm text-violet-800">
+        <section className="paper-card rounded-2xl p-5">
+          <h2 className="font-display text-xl font-semibold">Keep or stash?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Keep it in your active list, or stash it to archive.
           </p>
           <div className="mt-4 flex gap-3">
-            <button
-              type="button"
-              disabled={!!loading}
-              onClick={() => runAction("keep")}
-              className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-60"
-            >
+            <Button type="button" disabled={!!loading} onClick={() => runAction("keep")}>
               Keep
-            </button>
-            <button
-              type="button"
-              disabled={!!loading}
-              onClick={() => runAction("stash")}
-              className="rounded-xl border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-60"
-            >
+            </Button>
+            <Button type="button" variant="secondary" disabled={!!loading} onClick={() => runAction("stash")}>
               Stash
-            </button>
+            </Button>
           </div>
         </section>
       ) : null}
 
       {(item.status === "stashed" || item.status === "expired") && (
         <section>
-          <button
-            type="button"
-            disabled={!!loading}
-            onClick={() => runAction("reopen")}
-            className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60"
-          >
+          <Button type="button" variant="secondary" disabled={!!loading} onClick={() => runAction("reopen")}>
             Move back to Active
-          </button>
+          </Button>
         </section>
       )}
 
-      <StructuredSection structured={structured} />
+      {brief?.relatedRepos?.length ? <RelatedRepos repos={brief.relatedRepos} /> : null}
+
+      {brief?.setupCommands?.length ? <SetupCommands commands={brief.setupCommands} /> : null}
+
+      {category === "recipe" ? (
+        <RecipePanel ingredients={brief?.ingredients} steps={brief?.steps} />
+      ) : null}
+
+      {brief?.takeaways?.length ? (
+        <section className="paper-card rounded-2xl p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Takeaways
+          </h2>
+          <ul className="mt-4 space-y-3">
+            {brief.takeaways.map((line) => (
+              <li key={line} className="flex gap-3 text-[15px] leading-7">
+                <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-foreground" />
+                {line}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {brief?.keyFeatures?.length ? (
+        <section className="paper-card rounded-2xl p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Features
+          </h2>
+          <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {brief.keyFeatures.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {!processing ? (
+        <button
+          type="button"
+          disabled={!!loading}
+          onClick={() => runAction("retry")}
+          className="text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-60"
+        >
+          {loading === "retry" ? "Regenerating…" : "Regenerate note"}
+        </button>
+      ) : null}
 
       {item.transcript ? (
-        <details className="rounded-2xl border border-zinc-200 bg-white p-5">
-          <summary className="cursor-pointer font-medium text-zinc-900">Full transcript</summary>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-600">
+        <details className="paper-card rounded-2xl p-5">
+          <summary className="cursor-pointer font-medium">Full transcript</summary>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
             {item.transcript}
           </p>
         </details>
       ) : null}
 
       {item.caption ? (
-        <details className="rounded-2xl border border-zinc-200 bg-white p-5">
-          <summary className="cursor-pointer font-medium text-zinc-900">Caption</summary>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-600">{item.caption}</p>
+        <details className="paper-card rounded-2xl p-5">
+          <summary className="cursor-pointer font-medium">Caption</summary>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{item.caption}</p>
         </details>
       ) : null}
 
       {item.processing_error ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3">
-          <p className="text-sm text-amber-800">Partial extraction: {item.processing_error}</p>
-          <button
-            type="button"
-            disabled={!!loading}
-            onClick={() => runAction("retry")}
-            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-60"
-          >
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted px-4 py-3">
+          <p className="text-sm">Partial extraction: {item.processing_error}</p>
+          <Button type="button" size="sm" disabled={!!loading} onClick={() => runAction("retry")}>
             Retry
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
-  );
-}
-
-function StructuredSection({ structured }: { structured: StructuredData | null }) {
-  if (!structured || typeof structured !== "object") return null;
-
-  const data = structured as Record<string, unknown>;
-
-  return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-5">
-      <h2 className="font-semibold text-zinc-900">Extracted details</h2>
-      <div className="mt-4 space-y-4 text-sm text-zinc-700">
-        {Array.isArray(data.ingredients) && (
-          <div>
-            <h3 className="mb-2 font-medium">Ingredients</h3>
-            <ul className="list-disc space-y-1 pl-5">
-              {(data.ingredients as string[]).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {Array.isArray(data.steps) && (
-          <div>
-            <h3 className="mb-2 font-medium">Steps</h3>
-            <ol className="list-decimal space-y-1 pl-5">
-              {(data.steps as string[]).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ol>
-          </div>
-        )}
-        {Array.isArray(data.takeaways) && (
-          <div>
-            <h3 className="mb-2 font-medium">Takeaways</h3>
-            <ul className="list-disc space-y-1 pl-5">
-              {(data.takeaways as string[]).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {Array.isArray(data.keyFeatures) && (
-          <div>
-            <h3 className="mb-2 font-medium">Key features</h3>
-            <ul className="list-disc space-y-1 pl-5">
-              {(data.keyFeatures as string[]).map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {typeof data.purpose === "string" && (
-          <p>
-            <span className="font-medium">Purpose: </span>
-            {data.purpose}
-          </p>
-        )}
-        {typeof data.readmeSummary === "string" && (
-          <p>
-            <span className="font-medium">README: </span>
-            {data.readmeSummary}
-          </p>
-        )}
-        {typeof data.whyPopular === "string" && (
-          <p>
-            <span className="font-medium">Why popular: </span>
-            {data.whyPopular}
-          </p>
-        )}
-      </div>
-    </section>
   );
 }

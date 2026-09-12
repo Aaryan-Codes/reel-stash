@@ -40,6 +40,8 @@ export async function POST(request: Request) {
       source,
       status: "processing",
       caption: body.note ?? null,
+      processing_stage: "queued",
+      processing_progress: 8,
     })
     .select("id, status, created_at")
     .single();
