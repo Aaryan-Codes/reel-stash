@@ -1,14 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAppUser, getDb } from "@/lib/auth/session";
 import type { ItemRow } from "@/lib/types";
 
 export async function getItemsByStatus(statuses: string[]): Promise<ItemRow[]> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getAppUser();
   if (!user) return [];
 
+  const supabase = await getDb();
   const { data } = await supabase
     .from("items")
     .select("*")
@@ -20,13 +17,10 @@ export async function getItemsByStatus(statuses: string[]): Promise<ItemRow[]> {
 }
 
 export async function getItem(id: string): Promise<ItemRow | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getAppUser();
   if (!user) return null;
 
+  const supabase = await getDb();
   const { data } = await supabase
     .from("items")
     .select("*")
@@ -38,12 +32,10 @@ export async function getItem(id: string): Promise<ItemRow | null> {
 }
 
 export async function markItemVisited(id: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
   if (!user) return;
 
+  const supabase = await getDb();
   const { data: item } = await supabase
     .from("items")
     .select("visited_at, status")
@@ -60,12 +52,10 @@ export async function markItemVisited(id: string) {
 }
 
 export async function getProfile() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAppUser();
   if (!user) return null;
 
+  const supabase = await getDb();
   const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
   return data;
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Archive, Inbox, Settings, Sparkles } from "lucide-react";
+import { isAuthBypassed } from "@/lib/auth/bypass";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -33,9 +34,13 @@ export function AppNav() {
           </Link>
           <p className="text-xs text-muted-foreground">Save links. Get structure.</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={signOut}>
-          Sign out
-        </Button>
+        {!isAuthBypassed() ? (
+          <Button variant="ghost" size="sm" onClick={signOut}>
+            Sign out
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">Auth off</span>
+        )}
       </div>
       <nav className="mx-auto flex max-w-3xl gap-1 overflow-x-auto px-4 pb-3">
         {links.map((link) => {

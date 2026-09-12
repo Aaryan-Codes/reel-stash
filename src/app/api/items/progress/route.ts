@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getAppUser, getDb } from "@/lib/auth/session";
 
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getAppUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const supabase = await getDb();
   const { data, error } = await supabase
     .from("items")
     .select("id, status, processing_stage, processing_progress, title, processing_error")

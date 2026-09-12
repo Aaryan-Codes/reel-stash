@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { isAuthBypassed } from "@/lib/auth/bypass";
 import { LoginForm } from "@/components/login-form";
 
 export default async function LoginPage({
@@ -5,6 +7,8 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  if (isAuthBypassed()) redirect("/inbox");
+
   const params = await searchParams;
 
   return (
@@ -23,9 +27,6 @@ export default async function LoginPage({
         <div className="mt-6">
           <LoginForm />
         </div>
-        <p className="mt-6 text-sm text-muted-foreground">
-          Need API keys first? See <code>docs/API_KEYS.md</code> in the project.
-        </p>
       </div>
     </main>
   );
